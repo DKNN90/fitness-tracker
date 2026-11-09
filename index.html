@@ -291,6 +291,7 @@ var sched=null;
 var dbRef=null,dbBusy=false,dbTimer=null,dbDirty=false;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+var BUILD='2026-11-09.3';
 function todayISO(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');}
 function fdate(d,long){return new Date(pd(d)).toLocaleDateString('en-GB',long?{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}:{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});}
 function setSync(t){var e=document.getElementById('sync');if(e)e.textContent=t;}
@@ -643,6 +644,7 @@ function renderMore(){
   h+='</div>';
   h+='<div class="card"><h2>Progress report</h2><div class="mute">A short summary of your last 7 days, weight history and measurements. Paste it to Claude to get your plan reviewed and adjusted.</div><div style="margin-top:10px"><button class="btn" data-act="report">Copy progress report</button> <span id="rp" class="mute"></span></div><div id="rpbox"></div></div><div class="card"><h2>Backup and restore</h2><div class="mute">Your data lives on this device'+(standalone?'':' and in your Claude account')+'. Copy a backup now and then, or paste one to restore.</div><div style="margin-top:10px"><button class="btn sec" data-act="backup">Copy backup of my data</button> <span id="bk" class="mute"></span></div><textarea id="rest" rows="3" placeholder="Paste a backup here to restore" style="width:100%;margin-top:10px"></textarea><div style="margin-top:8px"><button class="btn sec" data-act="restore">Restore from pasted backup</button> <span id="rs" class="mute"></span></div></div>';
   if(window.__installEvt)h+='<div class="card"><h2>Install</h2><button class="btn block" data-act="install">Install this app</button></div>';
+  h+='<div class="mute" style="text-align:center;margin:14px 0">App version '+BUILD+'</div>';
   return h;
 }
 function render(){
@@ -720,6 +722,6 @@ try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 render();initDb();
 //UI_END
 </script>
-<script>if('serviceWorker' in navigator&&!window.claude){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator&&!window.claude){window.addEventListener('load',function(){var had=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(function(r){r.update();}).catch(function(){});var rl=false;navigator.serviceWorker.addEventListener('controllerchange',function(){if(had&&!rl){rl=true;location.reload();}});});}</script>
 </body>
 </html>
