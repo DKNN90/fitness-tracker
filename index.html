@@ -84,6 +84,7 @@ ul{margin:6px 0 6px 18px;padding:0}li{margin:3px 0}
 <script>
 //CORE_START
 const START='2026-11-09';
+const PLAN_START='2026-11-11';
 const BREAKS=[['2026-11-14','2026-11-23'],['2026-12-02','2026-12-06'],['2026-12-25','2026-12-27'],['2027-04-24','2027-05-01']];
 const DAYMS=86400000;
 function pd(s){const a=s.split('-').map(Number);return Date.UTC(a[0],a[1]-1,a[2]);}
@@ -95,8 +96,8 @@ function isPaused(s,pauses){return (pauses||[]).some(function(p){return s>=p.fro
 
 const W={};
 function wk(n,o){W[n]=Object.assign({n:n,sets:3,reps:'8-10',rpe:7,label:'Build',int:[[8,45,75]]},o);}
-wk(1,{label:'Baseline',reps:'12',rpe:6,int:[[8,40,80]],test:'base',note:'Record your starting weights, and do the 5-minute bike test on your first interval day.'});
-wk(2,{label:'Re-entry',reps:'12',rpe:6,int:[[8,40,80]],order:['A','B','I'],note:'Back after 10 days off: start at Week 1 weights or about 10% lighter.'});
+wk(1,{label:'Baseline',reps:'12',rpe:6,int:[[8,40,80]],order:['A','B'],note:'Record your starting weights. Start each lift at 5 kg and rate how it felt.'});
+wk(2,{label:'Re-entry',reps:'12',rpe:6,int:[[8,40,80]],order:['A','B','I'],test:'base',note:'Back after 10 days off: start at Week 1 weights or about 10% lighter. Do the 5-minute bike test in your interval session.'});
 wk(3,{reps:'12',rpe:6,int:[[8,40,80]],order:['A','I']});
 wk(4,{reps:'10',note:'Back after a break: start at about 90% of your last loads, then progress.'});
 wk(5,{reps:'10',int:[[9,45,75]]});
@@ -212,10 +213,10 @@ function buildSchedule(pauses){
   var weeks=[],byDate={},plan=1,mon=START;
   for(var i=0;i<80;i++){
     var days=[];for(var k=0;k<7;k++)days.push(addDays(mon,k));
-    var avail=days.filter(function(d){return !isBreak(d)&&!isPaused(d,pauses);});
+    var avail=days.filter(function(d){return d>=PLAN_START&&!isBreak(d)&&!isPaused(d,pauses);});
     var CORE=[1,3,4,6];
     var slots=avail.filter(function(d){return CORE.indexOf(dow(d))>=0;});
-    var slotsNoPause=days.filter(function(d){return !isBreak(d)&&CORE.indexOf(dow(d))>=0;});
+    var slotsNoPause=days.filter(function(d){return d>=PLAN_START&&!isBreak(d)&&CORE.indexOf(dow(d))>=0;});
     var w={mon:mon,days:days,avail:avail,sessions:[],planWeek:null,status:'off'};
     if(plan<=25&&(slots.length>=2||(slots.length===1&&slotsNoPause.length===1))){
       w.planWeek=plan;w.status='train';
@@ -450,7 +451,7 @@ function renderToday(){
   var s=sessionAt(date);
   if(s){h+=sessionHtml(s,date);return h;}
   var card='<div class="card">';
-  if(date<START)card+='<h2>Plan starts soon</h2><div class="mute">Your first session is '+fdate(START,true)+'.</div>';
+  if(date<PLAN_START)card+='<h2>Plan starts soon</h2><div class="mute">Your first session is '+fdate(PLAN_START,true)+'.</div>';
   else if(isPaused(date,state.pauses))card+='<h2>Paused</h2><div class="mute">Training is on hold. Resume in More when you are ready.</div>';
   else if(isBreak(date)){var br=BREAKS.filter(function(b){return date>=b[0]&&date<=b[1];})[0];card+='<h2>Planned break</h2><div class="mute">Rest up. Training resumes after '+fdate(br[1],true)+'.</div>';}
   else if(sched.weeks[sched.weeks.length-1].mon<=date&&date>=addDays(sched.weeks[sched.weeks.length-1].mon,-7)&&!nextSession(date))card+='<h2>Plan complete</h2><div class="mute">Check your test results in Progress.</div>';
@@ -475,7 +476,7 @@ function sessClass(s,t){
 }
 var TL={A:'Strength A',B:'Strength B',I:'Intervals',Z:'Zone 2',T1:'Strength test',T2:'Bike test'};
 function renderPlan(){
-  var t=todayISO(),h='<div class="card"><h2>Your 25 weeks</h2><div class="mute">9 Nov 2026 to 11 May 2027, with four planned breaks. Tap a session to open it.</div></div>';
+  var t=todayISO(),h='<div class="card"><h2>Your 25 weeks</h2><div class="mute">11 Nov 2026 to 12 May 2027, with four planned breaks. Tap a session to open it.</div></div>';
   var cur=null;
   sched.weeks.forEach(function(w){
     var end=addDays(w.mon,6);var isCur=t>=w.mon&&t<=end;if(isCur)cur=w.mon;
@@ -646,7 +647,7 @@ function makeIcs(){
     if(se.optional||se.date<t||isDone(se.date)||isSkipped(se.date))return;
     var s=sessionFor(se.type,se.planWeek,se.date,state.clearedOn,se.ii);if(!s)return;
     var d=se.date.replace(/-/g,'');var st=d+'T'+pad(hh)+pad(mm)+'00';var end=hh*60+mm+45;var et=d+'T'+pad(Math.floor(end/60)%24)+pad(end%60)+'00';
-    lines.push('BEGIN:VEVENT','UID:fit45-'+se.date+'-'+se.type+'@fit45','DTSTAMP:'+stamp,'DTSTART:'+st,'DTEND:'+et,'SUMMARY:'+icsEsc(s.title+' (Week '+se.planWeek+')'),'DESCRIPTION:'+icsEsc((s.sub||'')+'. About 45 minutes. Open the 45-Minute Fitness app to log it.'),'BEGIN:VALARM','TRIGGER:-PT30M','ACTION:DISPLAY','DESCRIPTION:Workout in 30 minutes','END:VALARM','END:VEVENT');n++;
+    lines.push('BEGIN:VEVENT','UID:fit45-'+se.date+'@fit45','DTSTAMP:'+stamp,'DTSTART:'+st,'DTEND:'+et,'SUMMARY:'+icsEsc(s.title+' (Week '+se.planWeek+')'),'DESCRIPTION:'+icsEsc((s.sub||'')+'. About 45 minutes. Open the 45-Minute Fitness app to log it.'),'BEGIN:VALARM','TRIGGER:-PT30M','ACTION:DISPLAY','DESCRIPTION:Workout in 30 minutes','END:VALARM','END:VEVENT');n++;
   });});
   lines.push('END:VCALENDAR');
   var msg=document.getElementById('icsmsg');
