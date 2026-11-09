@@ -473,6 +473,7 @@ function sessionHtml(s,date){
   if(s.interval)h+='<div class="mute">About '+s.interval.total+' minutes in total (warm-up '+s.interval.warm+', easy cool-down '+s.interval.cool+')</div>';
   else if(s.type==='A'||s.type==='B')h+='<div class="mute">Aim for about 45 minutes: about 30 lifting plus 15 easy cardio. If you run over, drop the last set of Superset 3.</div>';
   h+='</div>';
+  if(isSkipped(date)&&!isDone(date))h+=banner('warn','<b>Session skipped.</b> It will not count as missed and your weights carry on from your last session. Tap Undo skip at the bottom if you change your mind.');
   if(s.note)h+=banner('acc',esc(s.note));
   if(s.type!=='Z')h+=rpeGuide(false);
   if((s.type==='A'||s.type==='B')&&s.stage<0)h+=banner('warn','Pressing exercises are locked. Unlock them in More when you are pain-free and cleared to push.');
@@ -489,7 +490,7 @@ function sessionHtml(s,date){
   h+='</select><span class="mute">after this session</span></div>';
   if(pain!==''&&Number(pain)>=3)h+='<div class="banner bad" style="margin-top:10px">Pain of 3 or more is a stop signal. Skip anything that provokes it, and speak to a professional before the next session.'+(state.clearedOn?'<div style="margin-top:8px"><button class="btn bad" data-act="relock">Lock pressing again</button></div>':'')+'</div>';
   h+='</div>';
-  h+='<div class="row" style="margin-bottom:12px">'+(isDone(date)?'<button class="btn sec" style="flex:1" data-act="undone" data-d="'+date+'">Mark not done</button>':'<button class="btn" style="flex:2" data-act="done" data-d="'+date+'">Mark session done</button><button class="btn sec" style="flex:1" data-act="skip" data-d="'+date+'">Skip</button>')+'</div>';
+  h+='<div class="row" style="margin-bottom:12px">'+(isDone(date)?'<button class="btn sec" style="flex:1" data-act="undone" data-d="'+date+'">Mark not done</button>':isSkipped(date)?'<button class="btn" style="flex:2" data-act="done" data-d="'+date+'">Mark session done</button><button class="btn sec" style="flex:1" data-act="unskip" data-d="'+date+'">Undo skip</button>':'<button class="btn" style="flex:2" data-act="done" data-d="'+date+'">Mark session done</button><button class="btn sec" style="flex:1" data-act="skip" data-d="'+date+'">Skip</button>')+'</div>';
   if(isDone(date))h+='<div class="card"><h3>Review with Claude</h3><div class="mute">Copies a short report of this week. Paste it to Claude and ask what to change.</div><div style="margin-top:10px"><button class="btn" data-act="report">Copy progress report</button> <span id="rp" class="mute"></span></div><div id="rpbox"></div></div>';
   return h;
 }
@@ -658,7 +659,8 @@ function act(a,d,el){
   else if(a==='use'){var lu=ensureLog(d.d);lu.w=lu.w||{};lu.w[d.e]=d.v;save();render();}
   else if(a==='done'){var l=ensureLog(d.d);l.done=true;l.skipped=false;l.doneAt=Date.now();save();render();}
   else if(a==='undone'){var l2=ensureLog(d.d);l2.done=false;save();render();}
-  else if(a==='skip'){var l3=ensureLog(d.d);l3.skipped=true;l3.done=false;save();ui.date=null;render();}
+  else if(a==='skip'){var l3=ensureLog(d.d);l3.skipped=true;l3.done=false;save();render();window.scrollTo(0,0);}
+  else if(a==='unskip'){var l4=ensureLog(d.d);l4.skipped=false;save();render();}
   else if(a==='open'){ui.date=d.d;ui.tab='today';render();window.scrollTo(0,0);}
   else if(a==='back'){ui.date=null;render();}
   else if(a==='tstart'){
