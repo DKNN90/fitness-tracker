@@ -354,6 +354,62 @@ function lastEntry(id,date){
 function isDone(d){return !!(state.logs[d]&&state.logs[d].done);}
 function isSkipped(d){return !!(state.logs[d]&&state.logs[d].skipped);}
 
+/* ---------- progress report (paste to Claude for review) ---------- */
+function buildReport(){
+  var t=todayISO(),from=addDays(t,-6),L=[],names={};
+  var wkNow=null;
+  sched.weeks.forEach(function(w){if(t>=w.mon&&t<=addDays(w.mon,6))wkNow=w;});
+  if(!wkNow){var ld=Object.keys(state.logs).sort().filter(function(d){return state.logs[d].done;});if(ld.length){var q=state.logs[ld[ld.length-1]];wkNow={planWeek:q.planWeek,status:'train'};}}
+  var op=state.pauses.filter(function(p){return p.to==null;})[0];
+  L.push('FIT45 PROGRESS REPORT, '+t);
+  L.push('Plan: '+(wkNow&&wkNow.planWeek?'week '+wkNow.planWeek+' of 25 ('+W[wkNow.planWeek].label+')':'between weeks')+(op?', PAUSED since '+op.from:'')+'. Pressing: '+(state.clearedOn?'unlocked '+state.clearedOn:'locked')+'.');
+  var planned=0,done=0,skipped=0,missed=0;
+  sched.weeks.forEach(function(w){w.sessions.forEach(function(s){if(s.optional||s.date<from||s.date>t)return;planned++;if(isDone(s.date))done++;else if(isSkipped(s.date))skipped++;else if(s.date<t)missed++;});});
+  L.push('Last 7 days: '+done+' of '+planned+' scheduled sessions done, '+skipped+' skipped, '+missed+' missed.');
+  var ds=Object.keys(state.logs).filter(function(d){return d>=from&&d<=t;}).sort();
+  var any=false;
+  ds.forEach(function(d){
+    var lg=state.logs[d],s=sessionAt(d);if(!s)return;
+    var has=lg.done||lg.skipped||Object.keys(lg.ck||{}).length||Object.keys(lg.w||{}).length;if(!has)return;
+    any=true;
+    L.push('');
+    L.push(fdate(d)+' · '+s.title+' · week '+s.planWeek+' · '+(lg.done?'DONE':lg.skipped?'SKIPPED':'partly logged')+(lg.pain!=null?' · pain '+lg.pain+'/10':''));
+    if(s.interval){var rc=((lg.ck&&lg.ck.rounds)||[]).filter(Boolean).length;L.push('  Hard rounds ticked: '+rc+' of '+s.interval.rounds+' ('+s.sub+')');}
+    s.blocks.forEach(function(b){b.items.forEach(function(it){
+      names[it.id]=it.name;
+      var ck=(lg.ck&&lg.ck[it.id])||[];var tk=ck.filter(Boolean).length;
+      var P=PROG[it.id],wv=lg.w&&lg.w[it.id],unit=it.unit||(P&&P.u)||'kg';
+      var ln='  '+it.name+': ';
+      if(wv!=null&&wv!=='')ln+=wv+' '+unit.replace(/ \(.*\)/,'')+', ';
+      ln+=tk+'/'+it.sets+' sets';
+      var fb=lg.fb&&lg.fb[it.id];if(fb)ln+=', felt '+({e:'Easy',r:'Right',h:'Hard'}[fb]);
+      if(it.w&&!it.unit&&P){try{var sg=suggest(it.id,lastEntry(it.id,d),d,!!(W[s.planWeek]&&W[s.planWeek].deload));if(sg)ln+=' (target was '+nfmt(sg.kg)+')';}catch(e){}}
+      if(tk||(wv!=null&&wv!=='')||fb)L.push(ln);else L.push('  '+it.name+': not logged');
+    });});
+  });
+  if(!any)L.push('No sessions logged in the last 7 days.');
+  var tr=[];
+  Object.keys(PROG).forEach(function(id){
+    var pts=Object.keys(state.logs).sort().filter(function(d){var v=state.logs[d].w&&state.logs[d].w[id];return v!=null&&v!==''&&Number(v)>0;}).slice(-5);
+    if(!pts.length)return;
+    if(!names[id]){pts.some(function(d){var s=sessionAt(d);if(!s)return false;s.blocks.forEach(function(b){b.items.forEach(function(it){if(it.id===id)names[id]=it.name;});});return !!names[id];});}
+    tr.push('  '+(names[id]||id)+': '+pts.map(function(d){var f=state.logs[d].fb&&state.logs[d].fb[id];return state.logs[d].w[id]+(f?f.toUpperCase():'');}).join(' > '));
+  });
+  if(tr.length){L.push('');L.push('Weight history, oldest to newest (E=Easy, R=Right, H=Hard):');L=L.concat(tr);}
+  var m=state.meas.slice(-3);
+  if(m.length){L.push('');L.push('Measurements: '+m.map(function(x){return x.date+' HR '+(x.hr||'-')+', waist '+(x.waist||'-')+', '+(x.kg||'-')+' kg';}).join(' | '));}
+  var nx=nextSession(t);
+  if(nx){var ns=sessionAt(nx.date);if(ns){L.push('');L.push('Next session: '+fdate(nx.date)+', '+ns.title+'.');}}
+  L.push('');
+  L.push('Claude: please review this week. Flag stalled or too-fast lifts, pain or form concerns, missed sessions, and tell me exactly what to change for the next week (weights, sets, swaps, or an extra rest day).');
+  return L.join('\n');
+}
+function copyReport(){
+  var txt=buildReport(),el=document.getElementById('rp'),box=document.getElementById('rpbox');
+  function fallback(){if(el)el.textContent='Copy blocked here: select the text below and copy it';if(box)box.innerHTML='<textarea readonly rows="10" style="width:100%;margin-top:10px" onfocus="this.select()">'+esc(txt)+'</textarea>';}
+  try{navigator.clipboard.writeText(txt).then(function(){if(el)el.textContent='Copied: paste it to Claude';if(box)box.innerHTML='';},fallback);}catch(e){fallback();}
+}
+
 /* ---------- timer ---------- */
 var timer=null,actx=null;
 function mkTimer(iv,date){
@@ -434,6 +490,7 @@ function sessionHtml(s,date){
   if(pain!==''&&Number(pain)>=3)h+='<div class="banner bad" style="margin-top:10px">Pain of 3 or more is a stop signal. Skip anything that provokes it, and speak to a professional before the next session.'+(state.clearedOn?'<div style="margin-top:8px"><button class="btn bad" data-act="relock">Lock pressing again</button></div>':'')+'</div>';
   h+='</div>';
   h+='<div class="row" style="margin-bottom:12px">'+(isDone(date)?'<button class="btn sec" style="flex:1" data-act="undone" data-d="'+date+'">Mark not done</button>':'<button class="btn" style="flex:2" data-act="done" data-d="'+date+'">Mark session done</button><button class="btn sec" style="flex:1" data-act="skip" data-d="'+date+'">Skip</button>')+'</div>';
+  if(isDone(date))h+='<div class="card"><h3>Review with Claude</h3><div class="mute">Copies a short report of this week. Paste it to Claude and ask what to change.</div><div style="margin-top:10px"><button class="btn" data-act="report">Copy progress report</button> <span id="rp" class="mute"></span></div><div id="rpbox"></div></div>';
   return h;
 }
 function nextSession(from){
@@ -583,7 +640,7 @@ function renderMore(){
   if(standalone)h+='<div class="row" style="margin-top:10px"><span class="mute">Session time</span><input type="time" id="c_time" value="'+esc(state.calTime||'18:00')+'" data-caltime="1" style="width:120px"></div><div style="margin-top:10px"><button class="btn block" data-act="ics">Download calendar file</button> <span id="icsmsg" class="mute"></span></div>';
   else h+='<div class="banner warn" style="margin-top:10px">Calendar download works in the installed app, not in this preview.</div>';
   h+='</div>';
-  h+='<div class="card"><h2>Backup and restore</h2><div class="mute">Your data lives on this device'+(standalone?'':' and in your Claude account')+'. Copy a backup now and then, or paste one to restore.</div><div style="margin-top:10px"><button class="btn sec" data-act="backup">Copy backup of my data</button> <span id="bk" class="mute"></span></div><textarea id="rest" rows="3" placeholder="Paste a backup here to restore" style="width:100%;margin-top:10px"></textarea><div style="margin-top:8px"><button class="btn sec" data-act="restore">Restore from pasted backup</button> <span id="rs" class="mute"></span></div></div>';
+  h+='<div class="card"><h2>Progress report</h2><div class="mute">A short summary of your last 7 days, weight history and measurements. Paste it to Claude to get your plan reviewed and adjusted.</div><div style="margin-top:10px"><button class="btn" data-act="report">Copy progress report</button> <span id="rp" class="mute"></span></div><div id="rpbox"></div></div><div class="card"><h2>Backup and restore</h2><div class="mute">Your data lives on this device'+(standalone?'':' and in your Claude account')+'. Copy a backup now and then, or paste one to restore.</div><div style="margin-top:10px"><button class="btn sec" data-act="backup">Copy backup of my data</button> <span id="bk" class="mute"></span></div><textarea id="rest" rows="3" placeholder="Paste a backup here to restore" style="width:100%;margin-top:10px"></textarea><div style="margin-top:8px"><button class="btn sec" data-act="restore">Restore from pasted backup</button> <span id="rs" class="mute"></span></div></div>';
   if(window.__installEvt)h+='<div class="card"><h2>Install</h2><button class="btn block" data-act="install">Install this app</button></div>';
   return h;
 }
@@ -622,6 +679,7 @@ function act(a,d,el){
   else if(a==='ics'){makeIcs();}
   else if(a==='restore'){var ta=document.getElementById('rest'),rs=document.getElementById('rs');try{var o=JSON.parse(ta.value);if(!o||typeof o!=='object'||!o.logs)throw 0;state=normalize(o);state.updated=Date.now();localSave();queueDb();render();}catch(e){rs.textContent='That is not a valid backup';}}
   else if(a==='install'){var ev=window.__installEvt;if(ev){ev.prompt();window.__installEvt=null;setTimeout(render,500);}}
+  else if(a==='report'){copyReport();}
   else if(a==='backup'){var txt=JSON.stringify(state);var b=document.getElementById('bk');try{navigator.clipboard.writeText(txt).then(function(){b.textContent='Copied';},function(){b.textContent='Copy blocked here';});}catch(e){b.textContent='Copy blocked here';}}
 }
 document.addEventListener('click',function(e){
